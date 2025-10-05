@@ -1,0 +1,136 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>World Network Radio</title>
+<style>
+:root{--bg:#0f141a;--p1:#182230;--p2:#111a24;--tx:#eef4fb;--lcd:#c8ffe9;--green:#19caa3;--red:#ff6868;--bd:#193549}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--tx);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
+.container{max-width:1200px;margin:0 auto;padding:16px}
+.panel{background:linear-gradient(180deg,var(--p1),var(--p2));border:1px solid var(--bd);border-radius:18px;box-shadow:0 0 0 1px #000,0 14px 44px rgba(0,0,0,.55);padding:12px 12px 8px}
+.header{display:flex;justify-content:space-between;align-items:center;padding-bottom:8px;border-bottom:1px solid #000}
+.screw{width:12px;height:12px;border-radius:50%;background:#0d141c;border:1px solid #405468;box-shadow:inset 0 0 0 2px #111}
+.tag{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#d3deed}
+.status{font-size:10px;padding:3px 10px;border-radius:10px;border:1px solid #2a4a60}.rx{background:#185b41;color:#eafff9}.tx{background:#702525;color:#ffe9e9}
+.grid{display:grid;gap:12px}@media(min-width:980px){.grid-12{grid-template-columns:repeat(12,1fr)}}
+.lcdbox{border:1px solid var(--bd);border-radius:12px;background:linear-gradient(180deg,#0e1f2a,#0b1721);padding:10px 12px}
+.lcdtitle{font-size:10px;color:#97acc2;text-transform:uppercase;letter-spacing:.2em;margin-bottom:6px}
+.lcd{color:var(--lcd);font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Courier New",monospace;text-shadow:0 0 14px rgba(25,202,163,.62)}
+.label{font-size:10px;color:#97acc2;text-transform:uppercase;letter-spacing:.2em}
+.btn{cursor:pointer;border-radius:10px;border:2px solid #4fe5c3;padding:10px 14px;background:linear-gradient(180deg,#15453a,#103229);color:#edfff9;font-weight:700;display:inline-flex;align-items:center;gap:8px}
+.btn:active{transform:translateY(1px)}.btn-green{background:linear-gradient(180deg,#175a47,#124235);border-color:#3ee0bb;color:#d9fff5}.btn-red{background:linear-gradient(180deg,#9b3535,#692121);border-color:#ff8b8b;color:#ffe9e9}
+.btn-plain{background:#1a2c3e;border:1px solid #2e4f6a;color:#eaf5ff;font-weight:600}
+.select,.input{border-radius:10px;border:1px solid #2e4f6a;background:#102231;color:#f4f9ff;padding:8px 10px}
+.tiny{font-size:11px;color:#9eb6cc}.row{display:flex;gap:10px;align-items:center}.grow{flex:1}
+.pttCard{border:1px solid var(--bd);border-radius:14px;background:linear-gradient(180deg,#1b2d3c,#162636);padding:12px}
+.meter{height:20px;border:1px solid var(--bd);border-radius:9999px;background:#0f1e2a;overflow:hidden}.meter>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#20b58c,#9cffe6)}
+.knob{position:relative;width:86px;height:86px;border-radius:50%;border:1px solid #455a6f;background:radial-gradient(60% 80% at 50% 60%,#2c3c48,#121b24);box-shadow:inset 0 0 14px rgba(0,0,0,.6)}
+.knob .needle{position:absolute;left:50%;top:10px;width:2px;height:40px;background:#f0f6fb;box-shadow:0 0 10px rgba(255,255,255,.3);transform-origin:bottom center;transform:translateX(-50%) rotate(-135deg)}
+.knobWrap{display:flex;flex-direction:column;align-items:center;gap:6px}
+.scope{border:1px solid var(--bd);border-radius:12px;background:linear-gradient(180deg,#0b2030,#0a1c28);overflow:hidden;margin-top:10px}
+canvas{display:block;width:100%;height:72px}
+.content{margin-top:16px}.content .card{border:1px solid var(--bd);border-radius:16px;background:#182a45e0;padding:16px}
+.roster{border:1px solid var(--bd);border-radius:12px;background:#0f1e2a;max-height:170px;overflow:auto}
+.rosterItem{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid #173449}
+.rosterItem:last-child{border-bottom:none}.rosterItem.you{background:#154e3e;border-color:#1e7f66}
+</style>
+</head><body>
+<div class="container">
+  <div class="panel" id="radioTop">
+    <div class="header">
+      <div class="row"><div class="screw" aria-hidden="true"></div><div class="tag">HF/VHF • MODEL X90</div></div>
+      <div class="row"><div id="rxTxTag" class="status rx">RX</div><div class="screw" aria-hidden="true"></div></div>
+    </div>
+
+    <div class="grid grid-12" style="padding-top:12px">
+      <div class="lcdbox" style="grid-column:span 4/auto">
+        <div class="lcdtitle">Main Panel</div>
+        <div class="lcd" style="font-size:26px;letter-spacing:.04em">WORLD NETWORK</div>
+      </div>
+
+      <div style="grid-column:span 4/auto;display:flex;gap:12px;align-items:stretch">
+        <div class="grow pttCard" style="width:100%">
+          <div class="label">CTCSS</div>
+          <select id="ctcss" class="select" style="width:100%;margin-top:6px" title="Select tone">
+            <option value="OPEN">OPEN (no tone)</option>
+          </select>
+          <div class="tiny" style="margin-top:6px">Presence & DMs scoped by tone.</div>
+        </div>
+      </div>
+
+      <div style="grid-column:span 2/auto">
+        <div class="lcdbox"><div class="lcdtitle">Active Ops</div><div class="lcd" id="activeCount" style="font-size:30px">1</div></div>
+      </div>
+
+      <div style="grid-column:span 2/auto">
+        <div class="row" style="gap:8px">
+          <input id="myCall" class="input grow" placeholder="Your Callsign" />
+        </div>
+        <div class="tiny" style="margin-top:6px">Edit & share your callsign.</div>
+      </div>
+
+      <div style="grid-column:span 6/auto">
+        <div class="pttCard">
+          <div class="label">PTT</div>
+          <button type="button" id="pttBtn" class="btn btn-green" style="width:100%;margin-top:6px">PTT: OFF (Click to start)</button>
+          <div style="margin-top:10px">
+            <div class="label">Mic Level</div>
+            <div class="meter" style="height:20px;margin-top:4px"><i id="micBar"></i></div>
+          </div>
+          <div class="scope"><canvas id="scope"></canvas></div>
+          <div id="micHelp" class="tiny" style="margin-top:6px"></div>
+        </div>
+      </div>
+
+      <div style="grid-column:span 6/auto;display:flex;gap:12px;align-items:stretch">
+        <div class="pttCard" style="width:220px;display:flex;flex-direction:column;align-items:center;justify-content:center">
+          <div class="label" style="margin-bottom:6px">Mic Vol</div>
+          <div class="knobWrap">
+            <div id="knob" class="knob" role="slider" aria-label="Mic volume" aria-valuemin="0" aria-valuemax="2" aria-valuenow="1.00">
+              <div id="needle" class="needle"></div>
+            </div>
+            <div class="lcd" id="volReadout">1.00x</div>
+          </div>
+        </div>
+
+        <div class="pttCard grow">
+          <div class="label">Active Call Signs</div>
+          <div id="rosterList" class="roster" style="margin-top:6px"></div>
+
+          <div class="label" style="margin-top:10px">Direct Message</div>
+          <div class="row" style="margin-top:6px"><select id="dmTo" class="select grow" title="Select recipient"></select></div>
+          <div class="row" style="margin-top:6px"><input id="dmInput" class="input grow" placeholder="Type & Enter…"/><button type="button" id="dmSend" class="btn btn-plain">Send</button></div>
+          <div id="dmTray" class="tiny" style="margin-top:6px;max-height:86px;overflow:auto"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="card" id="contentCard">
+      <h2 style="margin-top:0">Website Content Area</h2>
+      <p>Your regular homepage content goes here. The radio UI is fully contained above.</p>
+      <p><strong>Mic tip:</strong> Test on the <em>published</em> HTTPS site.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+const TONES=[67.0,69.3,71.9,74.4,77.0,79.7,82.5,85.4,88.5,91.5,94.8,97.4,100.0,103.5,107.2,110.9,114.8,118.8,123.0,127.3,131.8,136.5,141.3,146.2,151.4,156.7,162.2,167.9,173.8,179.9,186.2,192.8,203.5,210.7,218.1,225.7,233.6,241.8,250.3];
+function randCall(){const L="ABCDEFGHIJKLMNOPQRSTUVWXYZ",P=["K","N","W","AA","AB","AC"][Math.floor(Math.random()*6)],d=Math.floor(Math.random()*10),s=L[Math.floor(Math.random()*26)]+L[Math.floor(Math.random()*26)]+L[Math.floor(Math.random()*26)];return P+d+s}
+let myCall=localStorage.getItem('wrn_callsign')||randCall();
+let ctcss=localStorage.getItem('wrn_ctcss')||'OPEN';
+let micGain=parseFloat(localStorage.getItem('wrn_mic_gain')||'1.00');micGain=Math.min(2,Math.max(0,micGain));
+let tx=false,presenceBC,chatBC,activeSet=new Set([myCall]);
+const rxTxTag=document.getElementById('rxTxTag'),ctcssSel=document.getElementById('ctcss'),activeCountEl=document.getElementById('activeCount'),rosterList=document.getElementById('rosterList'),myCallInp=document.getElementById('myCall'),pttBtn=document.getElementById('pttBtn'),micBar=document.getElementById('micBar'),micHelp=document.getElementById('micHelp'),knob=document.getElementById('knob'),needle=document.getElementById('needle'),volRead=document.getElementById('volReadout'),dmTo=document.getElementById('dmTo'),dmInput=document.getElementById('dmInput'),dmSend=document.getElementById('dmSend'),dmTray=document.getElementById('dmTray'),scopeCanvas=document.getElementById('scope');
+
+/* init UI */
+myCallInp.value=myCall; myCallInp.placeholder=myCall;
+volRead.textContent=micGain.toFixed(2)+'x'; knob.setAttribute('aria-valuenow',micGain.toFixed(2)); updateNeedle();
+TONES.forEach(t=>{const o=document.createElement('option');o.value=t.toFixed(1);o.textContent=`${t.toFixed(1)} Hz`;if(o.value===ctcss) o.selected=true; ctcssSel.appendChild(o);}); if(ctcss==='OPEN') ctcssSel.value='OPEN';
+
+/* presence & chat */
+function presenceKey(){return `wrn_presence_${ctcss==='OPEN'?'open':'ctcss_'+ctcss}`} function chatKey(){return `wrn_chat_${ctcss==='OPEN'?'open':'ctcss_'+ctcss}`}
+function initPresence(){try{presenceBC&&presenceBC.close()}catch{} activeSet=new Set([myCall]); renderRoster(); try{presenceBC=new BroadcastChannel(presenceKey()); presenceBC.addEventListener('message',e=>{const{type,who}=e.data||{}; if(!who) return; if(type==='join'||type==='heartbeat') activeSet.add(who); if(type==='leave') activeSet.delete(who); renderRoster();}); presenceBC.postMessage({type:'join',who:myCall}); window._hb&&clearInterval(window._hb); window._hb=setInterval(()=>presenceBC.postMessage({type:'heartbeat',who:myCall}),5000);}catch{}}
+function renderRoster(){activeCountEl.textContent=String(activeSet.size); rosterList.innerHTML=''; Array.from(activeSet).sort().forEach(cs=>{const row=document.createElement('div'); row.className='rosterItem'+(cs===myCall?' you':''); row.innerHTML=`<div style="font-family:monospace">${cs}</div><div class="tiny">${cs===myCall?'You':'RX'}</div>`; rosterList.appendChild(row);}); fillDMRecipients();}
+function initChat(){try{chatBC&&chatBC.close()}catch{} try{chatBC=new BroadcastChannel(chatKey()); chatBC.addEventListener('message',e=>{const m=e.data||{}; if(m.type==='dm'&&(m.to===myCall||m.from===myCall)) addDMTray(m);});}catch{} fillDMRecipients();}
+function fillDMRecipients(){const others=Array.from(activeSet).filter(c=>c!==myCall).sort(); dmTo.innerHTML=''; const opt0=document.createElement('option'); opt0.value=''; opt0.textContent='(Select recipient)'; dmTo.appendChild(opt0); others.forEach(c=>{const o=document.createElement('option'); o.value=c; o.textContent=c; dmTo.appendChild(o);});}
+function addDMTray(m){const item=document.createElement('div'); item.className='tiny'; item.style.cssText='border-top:1px solid #173449;padding:3px 0;'; item.inner

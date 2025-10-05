@@ -21,12 +21,24 @@
 .select,.input{border-radius:10px;border:1px solid #2e4f6a;background:#102231;color:#f4f9ff;padding:8px 10px}
 .tiny{font-size:11px;color:#9eb6cc}.row{display:flex;gap:10px;align-items:center}.grow{flex:1}
 .pttCard{border:1px solid var(--bd);border-radius:14px;background:linear-gradient(180deg,#1b2d3c,#162636);padding:12px}
-.meter{height:20px;border:1px solid var(--bd);border-radius:9999px;background:#0f1e2a;overflow:hidden}.meter>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#20b58c,#9cffe6)}
+.meterWrap{margin-top:10px}
+.meter{position:relative;height:26px;border:1px solid var(--bd);border-radius:9999px;overflow:hidden;background:#0f1e2a;}
+/* hashed/grid background behind the bar */
+.meter::before{
+  content:"";position:absolute;inset:0;pointer-events:none;opacity:.9;
+  background:
+    linear-gradient(180deg,rgba(200,255,235,.12) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(200,255,235,.12) 1px,transparent 1px);
+  background-size:20px 20px,48px 48px;
+  background-position:0 0,0 0;
+}
+.meter>i{position:relative;display:block;height:100%;width:0;
+  background:linear-gradient(90deg,#20b58c,#9cffe6);
+  box-shadow:0 0 14px rgba(156,255,230,.35) inset;
+}
 .knob{position:relative;width:86px;height:86px;border-radius:50%;border:1px solid #455a6f;background:radial-gradient(60% 80% at 50% 60%,#2c3c48,#121b24);box-shadow:inset 0 0 14px rgba(0,0,0,.6)}
 .knob .needle{position:absolute;left:50%;top:10px;width:2px;height:40px;background:#f0f6fb;box-shadow:0 0 10px rgba(255,255,255,.3);transform-origin:bottom center;transform:translateX(-50%) rotate(-135deg)}
 .knobWrap{display:flex;flex-direction:column;align-items:center;gap:6px}
-.scope{border:1px solid var(--bd);border-radius:12px;background:linear-gradient(180deg,#0b2030,#0a1c28);overflow:hidden;margin-top:10px}
-canvas{display:block;width:100%;height:72px}
 .content{margin-top:16px}.content .card{border:1px solid var(--bd);border-radius:16px;background:#182a45e0;padding:16px}
 .roster{border:1px solid var(--bd);border-radius:12px;background:#0f1e2a;max-height:170px;overflow:auto}
 .rosterItem{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid #173449}
@@ -71,11 +83,10 @@ canvas{display:block;width:100%;height:72px}
         <div class="pttCard">
           <div class="label">PTT</div>
           <button type="button" id="pttBtn" class="btn btn-green" style="width:100%;margin-top:6px">PTT: OFF (Click to start)</button>
-          <div style="margin-top:10px">
+          <div class="meterWrap">
             <div class="label">Mic Level</div>
-            <div class="meter" style="height:20px;margin-top:4px"><i id="micBar"></i></div>
+            <div class="meter" style="margin-top:4px"><i id="micBar"></i></div>
           </div>
-          <div class="scope"><canvas id="scope"></canvas></div>
           <div id="micHelp" class="tiny" style="margin-top:6px"></div>
         </div>
       </div>
@@ -108,27 +119,49 @@ canvas{display:block;width:100%;height:72px}
     <div class="card" id="contentCard">
       <h2 style="margin-top:0">Website Content Area</h2>
       <p>Your regular homepage content goes here. The radio UI is fully contained above.</p>
-      <p><strong>Mic tip:</strong> Test on the <em>published</em> HTTPS site.</p>
+      <p><strong>Mic tip:</strong> If embedded, the parent iframe must include <code>allow="microphone"</code>. Also open this app once directly and click <em>Allow</em>:
+        <a href="https://kb3hxa.github.io/radioapp/" target="_blank" rel="noopener">kb3hxa.github.io/radioapp</a>.
+      </p>
     </div>
   </div>
 </div>
 
 <script>
+/* ---------- Basic constants & helpers ---------- */
 const TONES=[67.0,69.3,71.9,74.4,77.0,79.7,82.5,85.4,88.5,91.5,94.8,97.4,100.0,103.5,107.2,110.9,114.8,118.8,123.0,127.3,131.8,136.5,141.3,146.2,151.4,156.7,162.2,167.9,173.8,179.9,186.2,192.8,203.5,210.7,218.1,225.7,233.6,241.8,250.3];
 function randCall(){const L="ABCDEFGHIJKLMNOPQRSTUVWXYZ",P=["K","N","W","AA","AB","AC"][Math.floor(Math.random()*6)],d=Math.floor(Math.random()*10),s=L[Math.floor(Math.random()*26)]+L[Math.floor(Math.random()*26)]+L[Math.floor(Math.random()*26)];return P+d+s}
+
+/* ---------- Elements ---------- */
+const rxTxTag=document.getElementById('rxTxTag');
+const ctcssSel=document.getElementById('ctcss');
+const activeCountEl=document.getElementById('activeCount');
+const rosterList=document.getElementById('rosterList');
+const myCallInp=document.getElementById('myCall');
+const pttBtn=document.getElementById('pttBtn');
+const micBar=document.getElementById('micBar');
+const micHelp=document.getElementById('micHelp');
+const knob=document.getElementById('knob');
+const needle=document.getElementById('needle');
+const volRead=document.getElementById('volReadout');
+const dmTo=document.getElementById('dmTo');
+const dmInput=document.getElementById('dmInput');
+const dmSend=document.getElementById('dmSend');
+const dmTray=document.getElementById('dmTray');
+
+/* ---------- State ---------- */
 let myCall=localStorage.getItem('wrn_callsign')||randCall();
 let ctcss=localStorage.getItem('wrn_ctcss')||'OPEN';
-let micGain=parseFloat(localStorage.getItem('wrn_mic_gain')||'1.00');micGain=Math.min(2,Math.max(0,micGain));
+let micGain=parseFloat(localStorage.getItem('wrn_mic_gain')||'1.00'); micGain=Math.min(2,Math.max(0,micGain));
 let tx=false,presenceBC,chatBC,activeSet=new Set([myCall]);
-const rxTxTag=document.getElementById('rxTxTag'),ctcssSel=document.getElementById('ctcss'),activeCountEl=document.getElementById('activeCount'),rosterList=document.getElementById('rosterList'),myCallInp=document.getElementById('myCall'),pttBtn=document.getElementById('pttBtn'),micBar=document.getElementById('micBar'),micHelp=document.getElementById('micHelp'),knob=document.getElementById('knob'),needle=document.getElementById('needle'),volRead=document.getElementById('volReadout'),dmTo=document.getElementById('dmTo'),dmInput=document.getElementById('dmInput'),dmSend=document.getElementById('dmSend'),dmTray=document.getElementById('dmTray'),scopeCanvas=document.getElementById('scope');
 
-/* init UI */
+/* ---------- Init UI ---------- */
 myCallInp.value=myCall; myCallInp.placeholder=myCall;
 volRead.textContent=micGain.toFixed(2)+'x'; knob.setAttribute('aria-valuenow',micGain.toFixed(2)); updateNeedle();
 TONES.forEach(t=>{const o=document.createElement('option');o.value=t.toFixed(1);o.textContent=`${t.toFixed(1)} Hz`;if(o.value===ctcss) o.selected=true; ctcssSel.appendChild(o);}); if(ctcss==='OPEN') ctcssSel.value='OPEN';
 
-/* presence & chat (same-origin tabs via BroadcastChannel) */
-function presenceKey(){return `wrn_presence_${ctcss==='OPEN'?'open':'ctcss_'+ctcss}`} function chatKey(){return `wrn_chat_${ctcss==='OPEN'?'open':'ctcss_'+ctcss}`}
+/* ---------- Presence / chat via BroadcastChannel (same-origin tabs) ---------- */
+function presenceKey(){return `wrn_presence_${ctcss==='OPEN'?'open':'ctcss_'+ctcss}`} 
+function chatKey(){return `wrn_chat_${ctcss==='OPEN'?'open':'ctcss_'+ctcss}`}
 function initPresence(){try{presenceBC&&presenceBC.close()}catch{} activeSet=new Set([myCall]); renderRoster(); try{presenceBC=new BroadcastChannel(presenceKey()); presenceBC.addEventListener('message',e=>{const{type,who}=e.data||{}; if(!who) return; if(type==='join'||type==='heartbeat') activeSet.add(who); if(type==='leave') activeSet.delete(who); renderRoster();}); presenceBC.postMessage({type:'join',who:myCall}); window._hb&&clearInterval(window._hb); window._hb=setInterval(()=>presenceBC.postMessage({type:'heartbeat',who:myCall}),5000);}catch{}}
 function renderRoster(){activeCountEl.textContent=String(activeSet.size); rosterList.innerHTML=''; Array.from(activeSet).sort().forEach(cs=>{const row=document.createElement('div'); row.className='rosterItem'+(cs===myCall?' you':''); row.innerHTML=`<div style="font-family:monospace">${cs}</div><div class="tiny">${cs===myCall?'You':'RX'}</div>`; rosterList.appendChild(row);}); fillDMRecipients();}
 function initChat(){try{chatBC&&chatBC.close()}catch{} try{chatBC=new BroadcastChannel(chatKey()); chatBC.addEventListener('message',e=>{const m=e.data||{}; if(m.type==='dm'&&(m.to===myCall||m.from===myCall)) addDMTray(m);});}catch{} fillDMRecipients();}
@@ -137,8 +170,8 @@ function addDMTray(m){const item=document.createElement('div'); item.className='
 dmInput.addEventListener('keydown',e=>{if(e.key==='Enter') sendDM()}); dmSend.addEventListener('click',sendDM);
 function sendDM(){const to=dmTo.value,text=dmInput.value.trim(); if(!to||!text) return; const msg={type:'dm',from:myCall,to,text,ts:Date.now()}; try{chatBC&&chatBC.postMessage(msg)}catch{} addDMTray(msg); dmInput.value=''}
 
-/* mic / PTT / AM scope */
-let audioCtx=null,srcNode=null,gainNode=null,analyser=null,raf=null,timeBuf=null,sampleRate=44100; const VAD_THRESHOLD=0.07,VAD_RELEASE_MS=200; let vadLastActive=0;
+/* ---------- Mic / PTT (meter only, no waveform) ---------- */
+let audioCtx=null,srcNode=null,gainNode=null,analyser=null,raf=null,timeBuf=null;
 function setRX(){rxTxTag.textContent='RX'; rxTxTag.className='status rx'} function setTX(){rxTxTag.textContent='TX'; rxTxTag.className='status tx'}
 function updatePTTButton(){ if(tx){ pttBtn.textContent='PTT: ON (Click to stop)'; pttBtn.className='btn btn-red'; setTX(); } else { pttBtn.textContent='PTT: OFF (Click to start)'; pttBtn.className='btn btn-green'; setRX(); } } updatePTTButton();
 pttBtn.addEventListener('click',()=>{ tx?stopTX():startTX() });
@@ -152,10 +185,13 @@ async function startTX(){
     if(!window.isSecureContext){ renderMicHelp('Microphone requires HTTPS (or http://localhost). Open this page over HTTPS.'+iframeHint(),'error'); }
     else { renderMicHelp('Click “Allow” on the browser prompt to enable your mic.'+iframeHint(),'info'); }
     const stream=await navigator.mediaDevices.getUserMedia({audio:true});
-    audioCtx=new (window.AudioContext||window.webkitAudioContext)(); sampleRate=audioCtx.sampleRate||44100;
-    srcNode=audioCtx.createMediaStreamSource(stream); gainNode=audioCtx.createGain(); gainNode.gain.value=micGain;
-    analyser=audioCtx.createAnalyser(); analyser.fftSize=2048; srcNode.connect(gainNode).connect(analyser);
-    timeBuf=new Uint8Array(analyser.fftSize/2); tx=true; updatePTTButton(); loopScope();
+    audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    srcNode=audioCtx.createMediaStreamSource(stream);
+    gainNode=audioCtx.createGain(); gainNode.gain.value=micGain;
+    analyser=audioCtx.createAnalyser(); analyser.fftSize=2048;
+    srcNode.connect(gainNode).connect(analyser);
+    timeBuf=new Uint8Array(analyser.fftSize/2);
+    tx=true; updatePTTButton(); loopMeter();
   }catch(e){
     console.error(e);
     let msg='Microphone unavailable. Use HTTPS and allow microphone access.'+iframeHint();
@@ -164,45 +200,18 @@ async function startTX(){
     renderMicHelp(msg,'error');
   }
 }
-function stopTX(){ if(!tx) return; cancelAnimationFrame(raf); try{srcNode.mediaStream.getTracks().forEach(t=>t.stop())}catch{} try{audioCtx&&audioCtx.close()}catch{} audioCtx=srcNode=gainNode=analyser=null; tx=false; micBar.style.width='0%'; updatePTTButton(); drawFlatScope() }
+function stopTX(){ if(!tx) return; cancelAnimationFrame(raf); try{srcNode.mediaStream.getTracks().forEach(t=>t.stop())}catch{} try{audioCtx&&audioCtx.close()}catch{} audioCtx=srcNode=gainNode=analyser=null; tx=false; micBar.style.width='0%'; updatePTTButton(); }
 
-function drawFlatScope(){ const c=scopeCanvas,ctx=c.getContext('2d'); c.width=c.clientWidth; c.height=c.clientHeight;
-  ctx.fillStyle='#0d2740'; ctx.fillRect(0,0,c.width,c.height);
-  ctx.strokeStyle='rgba(200,255,235,.12)'; ctx.lineWidth=1;
-  for(let x=0;x<c.width;x+=48){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,c.height);ctx.stroke()}
-  for(let y=0;y<c.height;y+=20){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(c.width,y);ctx.stroke()}
-  ctx.strokeStyle='rgba(200,255,235,.95)'; ctx.beginPath(); ctx.moveTo(0,c.height*0.5); ctx.lineTo(c.width,c.height*0.5); ctx.stroke()
-}
-function loopScope(){ const c=scopeCanvas,ctx=c.getContext('2d'),now=performance.now();
-  c.width=c.clientWidth; c.height=c.clientHeight;
-  ctx.fillStyle='#0d2740'; ctx.fillRect(0,0,c.width,c.height);
-  ctx.strokeStyle='rgba(200,255,235,.12)'; ctx.lineWidth=1;
-  for(let x=0;x<c.width;x+=48){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,c.height);ctx.stroke()}
-  for(let y=0;y<c.height;y+=20){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(c.width,y);ctx.stroke()}
-  let active=false;
-  if(analyser){
-    if(!timeBuf) timeBuf=new Uint8Array(analyser.fftSize/2);
-    analyser.getByteTimeDomainData(timeBuf);
-    let peak=0; for(let i=0;i<timeBuf.length;i++){ const v=Math.abs(timeBuf[i]-128)/128; if(v>peak) peak=v }
-    micBar.style.width=Math.min(100,Math.round(peak*120))+'%';
-    if(peak>0.07){active=true;vadLastActive=now}else if(now-vadLastActive<200){active=true}
-    const fc=1500, depth=0.9; let phase=0, dphi=2*Math.PI*fc/(sampleRate||44100);
-    ctx.beginPath();
-    for(let x=0;x<c.width;x++){
-      const i=Math.floor(x/c.width*timeBuf.length), v=((timeBuf[i]||128)-128)/128;
-      const env=tx && active ? (1+depth*v) : 0;
-      phase+=dphi; if(phase>2*Math.PI) phase-=2*Math.PI;
-      const car=Math.sin(phase);
-      const y=c.height*0.5 - env*car*(c.height*0.35);
-      if(x===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-    }
-    ctx.strokeStyle=tx && active ? 'rgba(255,150,150,.95)' : 'rgba(200,255,235,.95)';
-    ctx.lineWidth=2; ctx.stroke();
-  } else { drawFlatScope() }
-  raf=requestAnimationFrame(loopScope)
+function loopMeter(){
+  if(!analyser){ micBar.style.width='0%'; return; }
+  if(!timeBuf) timeBuf=new Uint8Array(analyser.fftSize/2);
+  analyser.getByteTimeDomainData(timeBuf);
+  let peak=0; for(let i=0;i<timeBuf.length;i++){ const v=Math.abs(timeBuf[i]-128)/128; if(v>peak) peak=v; }
+  micBar.style.width=Math.min(100,Math.round(peak*120))+'%';
+  raf=requestAnimationFrame(loopMeter);
 }
 
-/* knob */
+/* ---------- Mic volume knob ---------- */
 function updateNeedle(){const pct=(micGain-0)/(2-0),angle=-135+270*pct; needle.style.transform=`translateX(-50%) rotate(${angle}deg)`; volRead.textContent=micGain.toFixed(2)+'x'; knob.setAttribute('aria-valuenow',micGain.toFixed(2))}
 let dragging=false,startY=0,startVal=micGain;
 knob.addEventListener('mousedown',e=>{dragging=true;startY=e.clientY;startVal=micGain;e.preventDefault()});
@@ -211,11 +220,11 @@ window.addEventListener('mousemove',e=>{if(!dragging)return;const dy=startY-e.cl
 window.addEventListener('touchmove',e=>{if(!dragging)return;const dy=startY-e.touches[0].clientY,delta=2*(dy/150);micGain=Math.min(2,Math.max(0,+(startVal+delta).toFixed(3)));gainNode&&(gainNode.gain.value=micGain);localStorage.setItem('wrn_mic_gain',micGain);updateNeedle()},{passive:false});
 window.addEventListener('mouseup',()=>{dragging=false});window.addEventListener('touchend',()=>{dragging=false});
 
-/* wire & boot */
+/* ---------- Wiring & boot ---------- */
 function reScope(){try{presenceBC&&presenceBC.postMessage({type:'leave',who:myCall})}catch{}try{presenceBC&&presenceBC.close()}catch{}try{chatBC&&chatBC.close()}catch{}initPresence();initChat()}
 myCallInp.addEventListener('input',()=>{myCall=myCallInp.value.toUpperCase().replace(/[^A-Z0-9]/g,'');myCallInp.value=myCall;localStorage.setItem('wrn_callsign',myCall);try{presenceBC&&presenceBC.postMessage({type:'join',who:myCall})}catch{}renderRoster()});
 ctcssSel.addEventListener('change',()=>{ctcss=ctcssSel.value;localStorage.setItem('wrn_ctcss',ctcss);reScope()});
 if(!window.isSecureContext){renderMicHelp('Open this page over HTTPS (or http://localhost) for microphone access.'+iframeHint(),'error')}else{renderMicHelp('Click PTT, then allow microphone access when prompted.'+iframeHint(),'info')}
-drawFlatScope();initPresence();initChat();updatePTTButton();
+initPresence();initChat();updatePTTButton();
 </script>
 </body></html>
